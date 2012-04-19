@@ -116,7 +116,44 @@ boxplot(X_diff_below, ylim = c(0, 45), main="Noisy Xs")
 
 
 ### 2. Captopril and Blood pressure ###
-# The file captopril.dat contains the data shown in Section 2.2 of Verbeke, Introduction to Longitudinal Data Analysis, slides. Captopril is an angiotensin-converting enzyme inhibitor (ACE inhibitor) used for the treatment of hypertension. Use the before and after Spb measurements to examine the improvement (i.e. decrease) in blood pressure. Obtain a five-number summary for observed improvement. What is the correlation between change and initial blood pressure measurement? Obtain a confidence interval for the correlation and show the corresponding scatterplot.
+# The file captopril.dat contains the data shown in Section 2.2 of Verbeke, Introduction to Longitudinal Data Analysis, slides. Captopril is an angiotensin-converting enzyme inhibitor (ACE inhibitor) used for the treatment of hypertension. Use the before and after Spb measurements to examine the improvement (i.e. decrease) in blood pressure.
+capt = read.table(file="captopril.dat", header = T)
+head(capt)
+
+library(reshape)
+capt.Sbp = subset(capt, select = c(ID, BSbp, ASbp))
+names(capt.Sbp) = c("ID", "t0", "t1")
+capt.molten = melt(capt.Sbp, id.vars = c("ID"))
+capt.long = cast(capt.molten, ID + variable ~ .)
+head(capt.long)
+names(capt.long) = c("ID", "time", "blood_pressure")
+
+attach(capt.long)
+write.table(capt.long, file="captopril_long.dat", quote=F)
+detach(capt.long)
+
+capt.long<-read.table(file="captopril_long.dat", header=T)
+
+# Obtain a five-number summary for observed improvement.
+capt.improv <- capt$ASbp-capt$BSbp
+fivenum(capt.improv)
+boxplot(fivenum(capt.improv), main="Blood pressure improvement")
+# What is the correlation between change and initial blood pressure measurement?
+library(lme4)
+captList <- lmList(blood_pressure ~ time |ID, data = capt.long)
+summary(captList)
+confint(captList)
+cor(capt.improv,capt$BSbp)
+
+# Obtain a confidence interval for the correlation and show the corresponding scatterplot.
+
+
+xyplot(blood_pressure ~ time | ID, type=c("p", "r"), index.cond=function(x,y)
+{coef(lm(y ~ x))[1]}, data=capt.long)
+xyplot(blood_pressure ~ time , groups =ID, type=c("r"), index.cond=function(x,y)
+{coef(lm(y ~ x))[1]}, data=capt.long, col = c("black"))
+
+
 
 
 # 3. (more challenging). Use mvrnorm to construct a second artificial data example (n=100) mirroring the 4/2 class handout BUT with the correlation between true individual rate of change and W set to .7 instead of 0. Carry out the corresponding regression demonstration.
