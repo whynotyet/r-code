@@ -21,7 +21,7 @@ summary(truereg3)
 confint(truereg1)
 confint(truereg2)
 confint(truereg3)
-
+ 
 truereg1a = lm(theta ~ W + Xi.1)
 truereg2a = lm(theta ~ W + Xi.3)
 
