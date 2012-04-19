@@ -1,1 +1,1 @@
-#STATS 222 Exercise Set (Week 1)
+# STATS 222 Exercise Set (Week 1)
