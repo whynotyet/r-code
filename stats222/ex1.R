@@ -138,15 +138,9 @@ capt.long<-read.table(file="captopril_long.dat", header=T)
 capt.improv <- capt$ASbp-capt$BSbp
 fivenum(capt.improv)
 boxplot(fivenum(capt.improv), main="Blood pressure improvement")
-# What is the correlation between change and initial blood pressure measurement?
-library(lme4)
-captList <- lmList(blood_pressure ~ time |ID, data = capt.long)
-summary(captList)
-confint(captList)
+# What is the correlation between change and initial blood pressure measurement? Obtain a confidence interval for the correlation and show the corresponding scatterplot.
 cor(capt.improv,capt$BSbp)
-
-# Obtain a confidence interval for the correlation and show the corresponding scatterplot.
-
+#??? Confidence interval of correlation ???#
 
 xyplot(blood_pressure ~ time | ID, type=c("p", "r"), index.cond=function(x,y)
 {coef(lm(y ~ x))[1]}, data=capt.long)
@@ -156,4 +150,22 @@ xyplot(blood_pressure ~ time , groups =ID, type=c("r"), index.cond=function(x,y)
 
 
 
-# 3. (more challenging). Use mvrnorm to construct a second artificial data example (n=100) mirroring the 4/2 class handout BUT with the correlation between true individual rate of change and W set to .7 instead of 0. Carry out the corresponding regression demonstration.
+### 3. (more challenging). Use mvrnorm to construct a second artificial data example (n=100) mirroring the 4/2 class handout BUT with the correlation between true individual rate of change and W set to .7 instead of 0. Carry out the corresponding regression demonstration.
+n =100
+mu = c(50,5,10)
+cov = matrix(c(48, 0,.6*sqrt(48*4) ,0,5.3333333, .7*sqrt(4*5.33333), .6*sqrt(48*4) , .7*sqrt(4*5.33333), 4  ),3,3)
+dataset<-mvrnorm(n,mu,cov,empirical=T)
+dataframe<-as.data.frame(dataset)
+head(dataframe)
+names(dataframe)<-c("Xt0","theta","W")
+dataframe$Xt1<-dataframe$Xt0 - dataframe$theta
+dataframe$Xt3<-dataframe$Xt0 + dataframe$theta
+dataframe$Xt5<-dataframe$Xt0 + 3*dataframe$theta
+attach(dataframe)
+
+truediffreg<-lm(I(Xt5-Xt3)~W)
+truereg1<-lm(Xt5~W+Xt1)
+truereg2<-lm(Xt5~W+Xt3)
+summary(truediffreg)
+summary(truereg1)
+summary(truereg2)
