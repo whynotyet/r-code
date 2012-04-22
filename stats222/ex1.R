@@ -139,9 +139,9 @@ capt.improv <- capt$ASbp-capt$BSbp
 fivenum(capt.improv)
 boxplot(fivenum(capt.improv), main="Blood pressure improvement")
 # What is the correlation between change and initial blood pressure measurement? Obtain a confidence interval for the correlation and show the corresponding scatterplot.
-cor(capt.improv,capt$BSbp)
-#??? Confidence interval of correlation ???#
-
+cor.test(capt.improv,capt$BSbp)
+	# 95 percent confidence interval:
+	# 	-0.6933538  0.2703115 
 xyplot(blood_pressure ~ time | ID, type=c("p", "r"), index.cond=function(x,y)
 {coef(lm(y ~ x))[1]}, data=capt.long)
 xyplot(blood_pressure ~ time , groups =ID, type=c("r"), index.cond=function(x,y)
