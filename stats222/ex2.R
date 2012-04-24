@@ -124,7 +124,36 @@ xyplot(Xi ~ time | subject, type=c("p", "r"), index.cond=function(x,y)
 ######################################################
 # 4. Paired and unpaired samples, continuous vs categorical measurements.
 # Let's use again the 40 subjects in the week1 "X" data.
-# a. Measured data. Take the time1 and time5 observations and obtain a 95% Confidence Interval for the amount of change. Compare the width of that interval with a confidence interval for the difference beween the time5 and time1 means if we were told a different group of 40 subjects was measured at each of the time points (data no longer paired).
-# b. Dichotomous data. Instead look at these data with the criterion that a score of 50 or above is a "PASS" and below that is "FAIL". Carry out McNemar's test for the paired dichotomous data, and obtain a 95% CI for the difference between dependent proportions. Compare that confidence interval with the "unpaired" version (different group of 40 subjects was measured at each of the time points) for independent proportions. 
+week1Xi_fall = read.table(file="myth_data_bottom.txt", header = T)
+colnames(week1Xi_fall)<-c("Xi.1","Xi.3","Xi.5","W")
+# a. Measured data. Take the time1 and time5 observations and obtain a 95% Confidence Interval for the amount of change.
+attach(week1Xi_fall)
+inter = Xi.5-Xi.1
+t.test(inter)	#this is paird, same as t.test(Xi.5,Xi.1,paired=T)
+	#95%CI = 17.13709 23.34782
+barplot(sort(inter), ylab="Amount of change (t5-t1)", col="lightblue", main="Paired vs. unpaired")
+abline(h=17.13709, col="red", lwd=3)
+abline(h=23.34782, col="red", lwd=3)
+text(4, 18, paste("2.5% (paired) = ",17.13709), col="red")
+text(4, 22, paste("97.5% (paired) = ",23.34782), col="red")
 
+# Compare the width of that interval with a confidence interval for the difference beween the time5 and time1 means if we were told a different group of 40 subjects was measured at each of the time points (data no longer paired).
+t.test(Xi.5, Xi.1, paired=F)
+	#95%CI = 16.09929 24.38562 
+abline(h=16.09929, col="darkgreen", lwd=3)
+abline(h=24.38562, col="darkgreen", lwd=3)
+text(4, 15, paste("2.5% (unpaired) = ",16.09929), col="darkgreen")
+text(4, 25, paste("97.5% (unpaired) = ",24.38562), col="darkgreen")
+
+# b. Dichotomous data. Instead look at these data with the criterion that a score of 50 or above is a "PASS" and below that is "FAIL". Carry out McNemar's test for the paired dichotomous data, and obtain a 95% CI for the difference between dependent proportions. Compare that confidence interval with the "unpaired" version (different group of 40 subjects was measured at each of the time points) for independent proportions. 
+Xi.1d=Xi.1
+Xi.1d[which(Xi.1>=50)] = "PASS"
+Xi.1d[which(Xi.1<50)] = "FAIL"
+Xi.1d=as.factor(Xi.1d)
+Xi.5d=Xi.5
+Xi.5d[which(Xi.5>=50)] = "PASS"
+Xi.5d[which(Xi.5<50)] = "FAIL"
+Xi.5d=as.factor(Xi.5d)
+mcnemar.test(Xi.5d, Xi.1d)
+	#McNemar's chi-squared = 25.037, df = 1, p-value = 5.624e-07
 
