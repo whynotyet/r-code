@@ -8,7 +8,17 @@
 # Also try error Uniform [-2,2], accuracy one part in 50.
 # A similar demonstration can be found in my Shoe Shopping and the Reliability Coefficient
 
-unidata1<-runif(50,99,101) #how to specify the measurement error?
+unitrue<-runif(50,99,101)
+unierror1<-runif(50,-1,1)
+unidata1<- unitrue + unierror1
+reliab1 = var(unidata1) / (var(unidata1) + var(unitrue))
+	# = 0.6898593
+unierror2<-runif(50,-2,2)
+unidata2<- unitrue + unierror2
+reliab2 = var(unidata2) / (var(unidata2) + var(unitrue))
+	# = 0.8235635
+	#The reliability score is higher (better) for data with more noise.
+	#This shows that the reliability score is rather unreliable for data with low variance.
 
 ######################################################
 # 2. Regression toward the mean? Galton's data on the heights of parents and their children
@@ -30,7 +40,7 @@ detach(Galton.long)
 
 Galton.long<-read.table(file="Galton_long.dat", header=T)
 xyplot(Xi ~ time , groups =id, type=c("r"), index.cond=function(x,y)
-{coef(lm(y ~ x))[1]}, data=Galton.long, col = c("black"), strip=F)
+{coef(lm(y ~ x))[1]}, data=Galton.long, col = c("black"))
 #??? How to cut off left and right extrapolation ???#
 
 reg<-lm(child~parent,data=Galton)
@@ -154,6 +164,38 @@ Xi.5d=Xi.5
 Xi.5d[which(Xi.5>=50)] = "PASS"
 Xi.5d[which(Xi.5<50)] = "FAIL"
 Xi.5d=as.factor(Xi.5d)
-mcnemar.test(Xi.5d, Xi.1d)
-	#McNemar's chi-squared = 25.037, df = 1, p-value = 5.624e-07
+mcnemar.test(Xi.5d, Xi.1d, correct=F)
+	#McNemar's chi-squared = 27, df = 1, p-value = 2.035e-07
+Xi.pairs = matrix(c(Xi.1d,Xi.5d,rep(0,40)), ncol=3, byrow=F)
+for(i in 1:40){
+	if(Xi.pairs[i,1]==1 && Xi.pairs[i,2]==1)
+		Xi.pairs[i,3] = 1
+	if(Xi.pairs[i,1]==2 && Xi.pairs[i,2]==1)
+		Xi.pairs[i,3] = 2
+	if(Xi.pairs[i,1]==1 && Xi.pairs[i,2]==2)
+		Xi.pairs[i,3] = 3
+	if(Xi.pairs[i,1]==2 && Xi.pairs[i,2]==2)
+		Xi.pairs[i,3] = 4
+}
+count(Xi.pairs[,3])
 
+Xi.grid = matrix(c(10,0,27,3), ncol=2, byrow=T, dimnames=list("Xi.1"=c("PASS","FAIL"), "Xi.5"=c("PASS","FAIL")))
+mcnemar.test(Xi.grid, correct=F)
+#	McNemar's chi-squared = 27, df = 1, p-value = 2.035e-07
+install.packages("PropCIs")
+library(PropCIs)
+diffpropci.mp(0,27,40,.95)
+# 	95 percent confidence interval:
+# 		0.4906174 0.7950968 
+# 	sample estimates:
+# 		[1] 0.6428571
+
+#Now unpaired
+summary(Xi.1d)
+# 	FAIL PASS 
+# 	30   10 
+summary(Xi.5d)
+# 	FAIL PASS 
+# 	3   37 
+
+#not sure how to do this. diffpropci.mp() only for paired data...
