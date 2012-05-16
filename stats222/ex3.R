@@ -80,7 +80,34 @@ var(coef(ramus.list)[,2])
 
 ######################################################
 # 3. Continue problem 3a from week 2 with the "X" week 1 data. Produce a boxplot of the (40) individual rates of change and a scatterplot of the rates of change against the background, exogenous variable (W). Follow the week 3 NC example, pdf pages 3,4 of the plots link.
+week1Xi_fall = read.table(file="myth_data_bottom.txt", header = T)
+colnames(week1Xi_fall)<-c("Xi.1","Xi.3","Xi.5","W")
+week1Xi_fall$theta = (week1Xi_fall$Xi.5 - week1Xi_fall$Xi.1)/4
+pairs(week1Xi_fall, pch = 20)
+boxplot(week1Xi_fall$theta,main="Rate of change (theta) of fallible X")
+plot(week1Xi_fall$theta,week1Xi_fall$W, main="Fallible X: Rate of change against exogenous W")
+cor.test(week1Xi_fall$theta,week1Xi_fall$W)
+#	not significant correlation
+
+fall.long<-read.table(file="fall_long.dat", header=T)
+week1Xi_fall$subject <- 1:nrow(week1Xi_fall)
+Wt = tapply(week1Xi_fall$W, week1Xi_fall$subject, mean) #just to link Z's with ID
+fall.long$W = Wt[as.character(fall.long$subject)]
+
+# make plot of each subject's data and fit
+library(lattice)
+xyplot(Xi ~ time | subject, type=c("p", "r"), index.cond=function(x,y) {coef(lm(y ~ x))[1]}, data=fall.long)
+#make plot of all the fits
+xyplot(Xi ~ time , groups =subject, type=c("r"), index.cond=function(x,y) {coef(lm(y ~ x))[1]}, data=fall.long, col = c("black"))
+
+library(lme4)
+wList = lmList(Xi ~ time |subject, data = fall.long) #fit straight-line to each subject
+rate = coef(wList)[2]
+stem(rate[,1]) #stem-and-leaf of rates-of-change
+#	normal with mean of 4 or 4.5
 
 
 ######################################################
 # 4. Brain example. Take the extended model (p.3 on link) and derive the indicated combined model (either version). Also do a parameter interpretation listing as done for the base model (pdf p.2 link)
+
+#	see notes on that lecture!
