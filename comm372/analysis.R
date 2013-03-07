@@ -79,7 +79,8 @@ agg=ddply(data, .(time,marker), summarize, eda=mean(eda))
 ggplot(agg, aes(time,eda,group=marker))+geom_line(aes(color=marker))+theme_bw()
 agg$pos=factor(rep(c("Start","Middle","End"),c(20,20,20)), levels=c("Start","Middle","End"))
 
-ggplot(agg, aes(pos,eda))+geom_boxplot()+facet_grid(.~marker)+theme_bw()+labs(x="")
+ggplot(agg, aes(pos,eda))+geom_boxplot()+facet_grid(.~marker)+theme_bw()+labs(x="Period in 15s segment",y="Normalized EDA")
+#ggplot(ddply(agg,.(pos,marker), summarize, eda=mean(eda)), aes(pos,eda))+geom_bar(stat="identity")+facet_grid(.~marker)+theme_bw()+labs(x="")
 
 # fit Mixed Effects model
 hist(data$eda)
