@@ -3,7 +3,9 @@ library(ggplot2)
 library(lme4)
 library(plyr)
 library(grid)
-
+library(reshape2)
+library(splines)
+library(MASS)
 # Plot options
 opt=list(theme_bw(),theme(legend.position="bottom",legend.key=element_rect(color="white"),legend.key.width=unit(1.5, "cm"),panel.grid.major=element_line(size=0),panel.grid.minor=element_line(size=0),legend.text = element_text(size = 12),strip.background=element_rect(fill=0),strip.text=element_text(face="bold",size=12)),labs(linetype="",x="Time (seconds)", y=expression(paste("Normalized EDA (",mu, "S)"))))
 
@@ -13,9 +15,9 @@ rate=32
 cond1=c(rep(-1, 30*rate), rep(0, 15*rate), rep(1, 15*rate), rep(0, 15*rate), rep(1, 15*rate), rep(0, 15*rate), rep(1, 15*rate), rep(0, 15*rate), rep(1, 15*rate), rep(0, 15*rate), rep(1, 15*rate), rep(0, 15*rate), rep(1, 15*rate), rep(0, 15*rate), rep(1, 15*rate), rep(0, 15*rate), rep(1, 15*rate), rep(-1, 18*rate))
 cond2=c(rep(-1, 30*rate), rep(1, 15*rate), rep(0, 15*rate), rep(1, 15*rate), rep(0, 15*rate), rep(1, 15*rate), rep(0, 15*rate), rep(1, 15*rate), rep(0, 15*rate), rep(1, 15*rate), rep(0, 15*rate), rep(1, 15*rate), rep(0, 15*rate), rep(1, 15*rate), rep(0, 15*rate), rep(1, 15*rate), rep(0, 15*rate), rep(-1, 18*rate))
 
-#alternative
-cond1_=c(rep(-1, 30*rate), rep(-1, 15*rate), rep(1, 15*rate), rep(0, 15*rate), rep(1, 15*rate), rep(0, 15*rate), rep(1, 15*rate), rep(0, 15*rate), rep(1, 15*rate), rep(0, 15*rate), rep(1, 15*rate), rep(0, 15*rate), rep(1, 15*rate), rep(0, 15*rate), rep(1, 15*rate), rep(0, 15*rate), rep(-1, 15*rate), rep(-1, 18*rate))
-cond2_=c(rep(-1, 30*rate), rep(-1, 15*rate), rep(0, 15*rate), rep(1, 15*rate), rep(0, 15*rate), rep(1, 15*rate), rep(0, 15*rate), rep(1, 15*rate), rep(0, 15*rate), rep(1, 15*rate), rep(0, 15*rate), rep(1, 15*rate), rep(0, 15*rate), rep(1, 15*rate), rep(0, 15*rate), rep(1, 15*rate), rep(-1, 15*rate), rep(-1, 18*rate))
+# #alternative
+# cond1_=c(rep(-1, 30*rate), rep(-1, 15*rate), rep(1, 15*rate), rep(0, 15*rate), rep(1, 15*rate), rep(0, 15*rate), rep(1, 15*rate), rep(0, 15*rate), rep(1, 15*rate), rep(0, 15*rate), rep(1, 15*rate), rep(0, 15*rate), rep(1, 15*rate), rep(0, 15*rate), rep(1, 15*rate), rep(0, 15*rate), rep(-1, 15*rate), rep(-1, 18*rate))
+# cond2_=c(rep(-1, 30*rate), rep(-1, 15*rate), rep(0, 15*rate), rep(1, 15*rate), rep(0, 15*rate), rep(1, 15*rate), rep(0, 15*rate), rep(1, 15*rate), rep(0, 15*rate), rep(1, 15*rate), rep(0, 15*rate), rep(1, 15*rate), rep(0, 15*rate), rep(1, 15*rate), rep(0, 15*rate), rep(1, 15*rate), rep(-1, 15*rate), rep(-1, 18*rate))
 
 
 
@@ -32,7 +34,7 @@ cleanEDA = function(eda,sensitivity=1){
 
 
 # Takes trimmed file and normalizes for each segment based on last second of previous segment
-processFile = function(fileName,condition,rate=32,length=4*60+49,smooth=FALSE){
+processFile = function(fileName,condition,rate=32,length=4*60+49){
     data=read.csv(fileName, stringsAsFactors=F)
     colnames(data)=c("z","y","x","battery","temp","eda","time")
     data$time=strptime(data$time, format="%H:%M:%OS", tz="") #convert time
@@ -67,7 +69,7 @@ processFile = function(fileName,condition,rate=32,length=4*60+49,smooth=FALSE){
 }
 
 # Takes trimmed file and returns smoothed and averaged dataframe
-processFile = function(fileName,condition,rate=32,length=4*60+49,smooth=TRUE){
+processFileDelin = function(fileName,condition,rate=32,length=4*60+49,smooth=TRUE){
     data=read.csv(fileName, stringsAsFactors=F)
     colnames(data)=c("z","y","x","battery","temp","eda","time")
     data$time=strptime(data$time, format="%H:%M:%OS", tz="") #convert time
@@ -76,6 +78,8 @@ processFile = function(fileName,condition,rate=32,length=4*60+49,smooth=TRUE){
     data$marker=condition[1:nrow(data)] #add marker for condition
     data$eda=cleanEDA(cleanEDA(data$eda))
     data=subset(data, marker!=-1) #cut off slack
+        
+    data$eda=lm(eda~I(1:length(eda)), data)$resid #removes linear trend
     
     newdat=data.frame(eda0=rowMeans(matrix(subset(data, marker==0)$eda, ncol=8)), eda1=rowMeans(matrix(subset(data, marker==1)$eda, ncol=8)))
     #newdat=data.frame(eda0=rowMeans(matrix(subset(data, marker==0)$eda, ncol=7)), eda1=rowMeans(matrix(subset(data, marker==1)$eda, ncol=7)))
@@ -97,48 +101,72 @@ processFile = function(fileName,condition,rate=32,length=4*60+49,smooth=TRUE){
 
 
 # Put all data in one df
-data=rbind(cbind(subj=1,processFile("anita_pip_inter2.csv",cond2,smooth=FALSE)),
-cbind(subj=2,processFile("claire_pip_inter2.csv",cond2,smooth=FALSE)),
-cbind(subj=3,processFile("kaiping_pip_inter1.csv",cond1,smooth=FALSE)),
-cbind(subj=4,processFile("mathias_pip_cond2.csv",cond2,smooth=FALSE)),
-cbind(subj=5,processFile("soohee_pip_inter1.csv",cond1,smooth=FALSE)),
-cbind(subj=6,processFile("cody_pip_inter1.csv",cond1,smooth=FALSE)),
-cbind(subj=7,processFile("andreas_pip_inter2.csv",cond2,smooth=FALSE)),
-cbind(subj=8,processFile("andrea_pip_inter1.csv",cond1,smooth=FALSE)))
-
 data=rbind(cbind(subj=1,processFile("anita_pip_inter2.csv",cond2)),
-           cbind(subj=2,processFile("claire_pip_inter2.csv",cond2)),
-           cbind(subj=3,processFile("kaiping_pip_inter1.csv",cond1)),
-           cbind(subj=4,processFile("mathias_pip_cond2.csv",cond2)),
-           cbind(subj=5,processFile("soohee_pip_inter1.csv",cond1)),
-           cbind(subj=6,processFile("cody_pip_inter1.csv",cond1)),
-           cbind(subj=7,processFile("andreas_pip_inter2.csv",cond2)),
-           cbind(subj=8,processFile("andrea_pip_inter1.csv",cond1)))
+cbind(subj=2,processFile("claire_pip_inter2.csv",cond2)),
+cbind(subj=3,processFile("kaiping_pip_inter1.csv",cond1)),
+cbind(subj=4,processFile("mathias_pip_cond2.csv",cond2)),
+cbind(subj=5,processFile("soohee_pip_inter1.csv",cond1)),
+cbind(subj=6,processFile("cody_pip_inter1.csv",cond1)),
+cbind(subj=7,processFile("andreas_pip_inter2.csv",cond2)),
+cbind(subj=8,processFile("andrea_pip_inter1.csv",cond1)),
+cbind(subj=9,processFile("key_pip_inter2.csv",cond2)),
+cbind(subj=10,processFile("jordan_pip_inter1.csv",cond1)))
 
+dataDelin=rbind(cbind(subj=1,processFileDelin("anita_pip_inter2.csv",cond2)),
+        cbind(subj=2,processFileDelin("claire_pip_inter2.csv",cond2)),
+        cbind(subj=3,processFileDelin("kaiping_pip_inter1.csv",cond1)),
+        cbind(subj=4,processFileDelin("mathias_pip_cond2.csv",cond2)),
+        cbind(subj=5,processFileDelin("soohee_pip_inter1.csv",cond1)),
+        cbind(subj=6,processFileDelin("cody_pip_inter1.csv",cond1)),
+        cbind(subj=7,processFileDelin("andreas_pip_inter2.csv",cond2)),
+        cbind(subj=8,processFileDelin("andrea_pip_inter1.csv",cond1)),
+        cbind(subj=9,processFileDelin("key_pip_inter2.csv",cond2)),
+        cbind(subj=10,processFileDelin("jordan_pip_inter1.csv",cond1)))
 
 # plotting each subject
-ggplot(data, aes(time,eda,group=marker))+geom_line(aes(linetype=marker))+facet_grid(subj~.)+opt
+ggplot(dataDelin, aes(time,eda,group=marker))+geom_line(aes(linetype=marker))+facet_grid(subj~.)+opt
 
 # aggregating over subjects
-agg=ddply(data, .(time,marker), summarize, eda=mean(eda))
+agg=ddply(dataDelin, .(time,marker), summarize, eda=mean(eda))
 ggplot(agg, aes(time,eda,group=marker))+geom_line(aes(linetype=marker))+opt+theme(legend.position=c(.8,.9))
+ggplot(agg, aes(time,eda,group=marker))+geom_line()+stat_smooth(aes(linetype=marker),method=lm,formula=y~ns(x,6))+opt+theme(legend.position=c(.8,.9))
+
+
+ggplot(agg, aes(marker,eda))+geom_boxplot()+opt+labs(x="")
+
+temp=ddply(dataDelin, .(subj, marker), summarize, eda=median(eda))
+temp$delta=temp[,2]-temp[,3]
+t.test(temp[,2],temp[,3],paired=T)
+t.test(eda~marker,temp,paired=T)
+summary(aov(eda~marker*time+Error(subj), dataDelin))
 
 agg$pos=factor(rep(c("Start","Middle","End"),c(20,20,20)), levels=c("Start","Middle","End"))
-ggplot(agg, aes(pos,eda))+geom_boxplot()+facet_grid(.~marker)+opt
+ggplot(agg, aes(pos,eda))+geom_boxplot()+facet_grid(.~marker)+opt+labs(x="Stimulus Period (5 seconds each)")
 #ggplot(ddply(agg,.(pos,marker), summarize, eda=mean(eda)), aes(pos,eda))+geom_bar(stat="identity")+facet_grid(.~marker)+theme_bw()+labs(x="")
+agg$marker=factor(agg$marker, labels=c("PIP just appeared", "PIP just disappeared"))
+opt=list(theme_bw(),theme(legend.position=c(.8,.8),legend.key=element_rect(color="white"),legend.key.width=unit(1.2, "cm"),panel.grid.major=element_line(size=0),panel.grid.minor=element_line(size=0),strip.background=element_rect(fill=0),strip.text=element_text(face="bold")))
+opt=list(theme_bw(),theme(legend.position="bottom",legend.key=element_rect(color="white"),legend.key.width=unit(1.2, "cm"),panel.grid.major=element_line(size=0),panel.grid.minor=element_line(size=0),strip.background=element_rect(fill=0),strip.text=element_text(face="bold")),labs(linetype="",x="Time (seconds)", y=expression(paste("Normalized EDA (",mu, "S)"))))
+
+ggplot(agg, aes(pos,eda))+geom_boxplot()+facet_grid(.~marker)+opt+labs(x="Stimulus Period (5 seconds each)",title="Arousal from PIP")
+ggsave(file="~/Desktop/eda.png", dpi=300, height=5, width=7)
+
+summary(dataDelin)
+dataDelin$pos=NA
+dataDelin[dataDelin$time>=0&dataDelin$time<=5,]$pos="Start"
+dataDelin[dataDelin$time>5&dataDelin$time<=10,]$pos="Middle"
+dataDelin[dataDelin$time>10&dataDelin$time<=15,]$pos="End"
+dataDelin$pos=factor(dataDelin$pos, levels=c("Start","Middle","End"))
 
 # check for differneces
-summary(aov(eda~pos*marker, agg))
+summary(aov(eda~pos*marker+Error(subj),dataDelin))
 TukeyHSD.aov(aov(eda~pos*marker, agg))
 # fit Mixed Effects model
 hist(data$eda)
-m1=lmer(eda~marker:time+time+(time|subj), data) # slope only
-m2=lmer(eda~marker*time+(time|subj), data) # slope and interc.
-anova(m1,m2)
-summary(m2)
-
-
-
+m1=lmer(eda~marker:time+time+(time|subj), dataDelin) # slope only
+m1=lmer(eda~marker*time+(time|subj), dataDelin) # slope and interc.
+m2=lmer(eda~marker+time+I(time^2)+I(time^3)+(time+I(time^2)+I(time^3)|subj), dataDelin)# slope and interc.
+m3=lmer(eda~marker*time+marker*I(time^2)+marker:I(time^3)+marker:I(time^4)+(time+I(time^2)|subj), dataDelin)
+summary(m3)
 #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 # NEW IDEA: predict face/noFace based on time series
@@ -152,8 +180,24 @@ prepareFile = function(fileName,condition,rate=32,length=4*60+49){
     data$marker=condition[1:nrow(data)] #add marker for condition
     data$eda=scale(cleanEDA(cleanEDA(data$eda)))
     data=subset(data, marker!=-1) #cut off slack
+    data$eda=lm(eda~I(1:length(eda)), data)$resid #removes linear trend
     return(subset(data, select=c(eda,marker,time)))
 }
+
+# Compare orders
+data3=cbind(ord2=rowMeans(cbind(prepareFile("anita_pip_inter2.csv",cond2)[,1],
+            prepareFile("claire_pip_inter2.csv",cond2)[,1],
+            prepareFile("mathias_pip_cond2.csv",cond2)[,1],
+            prepareFile("andreas_pip_inter2.csv",cond2)[,1],
+            prepareFile("key_pip_inter2.csv",cond2)[,1])),
+            mark2=prepareFile("andreas_pip_inter2.csv",cond2)[,2],
+            ord1=rowMeans(cbind(prepareFile("kaiping_pip_inter1.csv",cond1)[,1],
+            prepareFile("soohee_pip_inter1.csv",cond1)[,1],
+            prepareFile("cody_pip_inter1.csv",cond1)[,1],
+            prepareFile("andrea_pip_inter1.csv",cond1)[,1],
+            prepareFile("jordan_pip_inter1.csv",cond1)[,1])),
+            mark2=prepareFile("andrea_pip_inter1.csv",cond1)[,2])
+plot.ts(data3)
 
 # Put all data in one df
 data2=rbind(cbind(subj=1,prepareFile("anita_pip_inter2.csv",cond2)),
@@ -163,7 +207,10 @@ data2=rbind(cbind(subj=1,prepareFile("anita_pip_inter2.csv",cond2)),
            cbind(subj=5,prepareFile("soohee_pip_inter1.csv",cond1)),
            cbind(subj=6,prepareFile("cody_pip_inter1.csv",cond1)),
            cbind(subj=7,prepareFile("andreas_pip_inter2.csv",cond2)),
-           cbind(subj=8,prepareFile("andrea_pip_inter1.csv",cond1)))
+           cbind(subj=8,prepareFile("andrea_pip_inter1.csv",cond1)),
+           cbind(subj=9,prepareFile("key_pip_inter2.csv",cond2)),
+           cbind(subj=10,prepareFile("jordan_pip_inter1.csv",cond1)))
+
 summary(data2)
 plot.ts(data2$eda)
 

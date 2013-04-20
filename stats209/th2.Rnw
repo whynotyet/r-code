@@ -1,0 +1,270 @@
+\documentclass{article}
+
+\title{STATS 209 - Take Home 2}
+\author{Rene Kizilcec}
+\date{March 8, 2013}
+\usepackage[cm]{fullpage}
+
+\begin{document}
+\maketitle 
+<<setup, include=FALSE, cache=FALSE>>=
+opts_chunk$set(fig.path='plots/', fig.align='center', fig.show='asis', echo=TRUE, comment = "", message = FALSE, tidy=FALSE, dev='postscript',fig.width=7, fig.height=5, out.width="\\linewidth")
+#options(replace.assign=TRUE,width=60,contrasts=c("contr.sum","contr.poly"))
+@
+
+
+<<echo=FALSE,message=FALSE,warning=FALSE,error=FALSE>>=
+library(knitr)
+library(plyr)
+library(ggplot2)
+library(psych)
+library(lme4)
+library(car)
+library(lsr)
+library(MatchIt)
+@
+
+\section*{Problem 1}
+
+<<>>=
+data(Prestige)
+Prestige=subset(Prestige, !is.na(type))
+Prestige$type=ifelse(Prestige$type=="bc","bc","pwc")
+table(Prestige$type)
+Prestige$type=as.numeric(as.factor(Prestige$type))-1
+@
+
+\subsection*{part a}
+<<>>=
+t.test(prestige~type, Prestige, var.equal=T)
+summary(lm(prestige~type+education, Prestige))
+cor.test(Prestige$type,Prestige$education)
+@
+Mean of BC group is 35.527 and mean of PWC is 56.943. The difference in means is 21.406 prestige points, which is highly significant according to our two sample t-test.
+
+The ANCOVA computes a difference in means of -6.798 i.e. the main effect is now reversed: BC professions have more prestige when adding education as a covariate. The main effect is still significnat with p=0.02. The coefficient on Education is highly significantly different from zero and is positive, suggesting that more years of education are associated with greater prestige.
+
+The problem is that the type variable and yrs. of education are highly correlated r=0.8, leading to a colinearity problem in the regression (or ANCOVA).
+
+\subsection*{part b}
+<<>>=
+m1=lm(prestige~type+education, Prestige)
+m2=lm(prestige~type*education, Prestige)
+anova(m1,m2)
+summary(m2)
+@
+Comparing the previous model to the same model with a type:education interaction term added yields that the interaction is not significant at the 0.05 level. Closer inspection of the new model shows that the inclusion of the interaction term has increased the main effect of type, such that the mean difference at education=0 is 26.33. However, that is extrapolating, as nobody has zero education. What is interesting is that each additional year of education for workers in the PWC group is associated with 6.9 more prestige points, but only 4.8 points for workers in the BC group.
+
+Anyway, but overall, as p-value adhering social scientists, we'd probably delete the interaction and stick to the two main effects.
+
+\subsection*{part c}
+<<>>=
+cbind(c("BC","PWC"),
+    round(predict(m2,newdata=data.frame(type=c(0,1),education=c(10,10)),interval="conf"),3))
+mean(Prestige$education)
+@
+For 10yrs of educ. the ANCOVA model with interaction estimates 43.343 for BC and 37.894 for PWC, a -5.449 difference in means. However, the 95\% conf. intervals of the two estimates overlap, which means that the difference is in fact not significantly different from zero.
+Looking at this for 10 years of education is interesting, because the average years of education in the sample is 10.8. Thus, we are not interpolating, but estimate data points that we actually have data on AND the T-Test above told us that the prestige means of the two groups are highly significantly different, but the ANCOVA tells us they're not.
+
+\subsection*{part d}
+<<>>=
+# function to compute treatment effect alpha (same as in handout)
+# takes beta as input
+computeAlpha=function(beta){
+    Ydiff=with(Prestige, mean(prestige[type==1])-mean(prestige[type==0]))
+    Xdiff=with(Prestige, mean(education[type==1])-mean(education[type==0]))
+    return(Ydiff-beta*Xdiff)    
+}
+summary(lm(prestige~type, Prestige))
+    #coef should match beta=0
+summary(lm(prestige~type+education, Prestige))
+    #ANCOVA coef on X  = 6.3823
+summary(lm(prestige~type*education, Prestige))
+    #control slope = 4.764
+
+computeAlpha(0) #t-test
+computeAlpha(6.3823) #standard ANCOVA
+betaYX.G=6.3823 #from ancova above
+rYX.G=cor(lm(prestige~type,Prestige)$resid, lm(education~type,Prestige)$resid)
+computeAlpha( betaYX.G/rYX.G ) #Valididty Correction
+computeAlpha(4.764) #Belson
+
+@
+Method 1: 21.415 higher prestige for PWC compared to BC on average
+
+Method 2: -6.7978 for educ=0; 5.449 lower prestige for PWC compared to BC given 10yrs of education (from part c)
+
+Method 3: -14.621 prestige difference between PWC and BC; PWC has lower prestige than BC
+
+Method 4: 0.3561 higher prestige for PWC compared to BC
+
+\newpage
+\section*{QUESTION 2}
+<<echo=FALSE>>=
+#install.packages("AER")
+library(AER)
+data("PSID1982")
+@
+\subsection*{part a}
+<<>>=
+m1=lm(wage~education, PSID1982)
+#summary(m1)
+cbind(coef=coef(m1),confint(m1))
+@
+The presumed increase in wage for each additional year of education is 84  with 95\% CI = (70, 98). 
+
+It is very likely for there to be omitted variables like skills, intelligence, work experience to name but a few. The estimated coefficient on education in this simple-minded regression is biased as a result of leaving out these variables in the regression. 
+We cannot make an "as if by experiment" conclusion because years of education is not randomly assigned but instead depends on many things that we do not observe (and that are not in the regression model). Thus, people differ in other variables in systematic ways that are confounded with years of education.
+
+\subsection*{part b}
+<<>>=
+PSID1982$industry=as.numeric(PSID1982$industry)-1
+cor.test(~industry+education, PSID1982)
+cor.test(~industry+wage, PSID1982)
+@
+As promised, moderate significant correlation with education and tiny insignificant correlation with wage. This satisfies the basic IV requirements for an instrument (just the basic ones: we don't know about things we don't know about ...). From this we would hope that the only way 'industry' is associated with wage is through education. From the regression above, we have reason to believe that education and wage are strongly associated.
+
+<<>>=
+summary(ivreg(wage~education|industry,data=PSID1982))
+@
+Using industry as an instrument, it looks like there are no significant returns to education (good I'm not getting this PhD for a higher salary).
+<<>>=
+Xhat=fitted(lm(education~industry,PSID1982)) #step 1
+summary(lm(wage~Xhat,PSID1982)) #step 2
+with(PSID1982, cov(wage,industry)/cov(education,industry)) #slopes
+@
+Coefficients are the same for all, but std. error higher in IV and TSLS compared to OLS. This shows that if only a weak instrument is available, accepting some bias may be better than increasing variance due to the weakness of the instrument.
+
+\subsection*{part c}
+<<>>=
+PSID1982=subset(PSID1982, gender=="male")
+
+m1=lm(wage~education, PSID1982)
+cbind(coef=coef(m1),confint(m1))
+
+cor.test(~industry+education, PSID1982)
+cor.test(~industry+wage, PSID1982)
+
+summary(ivreg(wage~education|industry,data=PSID1982))
+Xhat=fitted(lm(education~industry,PSID1982)) #step 1
+summary(lm(wage~Xhat,PSID1982)) #step 2
+with(PSID1982, cov(wage,industry)/cov(education,industry)) #slopes
+@
+Now, just looking at males. I'd expect it to not make much difference given that there were many more males than females in the sample.
+
+Simple-minded: 85 with 95\% CI = (70, 99); almost the same.
+
+Correlations: basic requirements of instrument 'industry' still hold.
+education     -20.70      33.21  -0.624 0.533190    
+
+IVREG, TSLS, Slopes: Coefficient on education not significant, using instrument.
+
+All in all, it is the same thing, as expected.
+
+\subsection*{part d}
+Diff in mortality for Trt-Ctrl = (18.2-19.4)/100 = -.012
+Diff in compliance Trt-Ctrl = 708/1065-1813/2695 = -0.008
+IV est = -.012/-.008 = 1.5
+
+\subsection*{part e}
+The following values are percentage point differences, so that we can easily check for significance using the provided SE intervals.
+
+Intent-to-Treat (ITT): 18.2-19.4 = -1.2 (not significant)
+
+As-Treated Analysis: 15-(24.6*257 + 19.4*2695)/(257+2695) = -4.853 (maybe sig.)
+
+Per-Protocol Analysis: 15-19.4 = -4.4 (SEs don't overlap, maybe sig.)
+
+CACE (Complier Average Causal Effect): 15-15.1 = -0.1 (not significant)
+
+ITT and CACE are not significant. The effect lies in whether people comply or not. This is picked up by As-Treated and Per-Protocol, though it is incorrectly attributed to the effectiveness of the drug.
+
+\newpage
+\section*{QUESTION 3}
+<<>>=
+data("Guns")
+Guns=subset(Guns, year == 1999)
+@
+\subsection*{part a}
+<<fig.align='center'>>=
+par(mfrow=c(1,2))
+boxplot(violent~law, Guns,main="Violent")
+boxplot(log(violent)~law, Guns,main="log(Violent)")
+@
+<<fig.align='center'>>=
+par(mfrow=c(1,2))
+hist(Guns$violent)
+hist(log(Guns$violent))
+@
+<<>>=
+table(Guns$law)
+fivenum(Guns[Guns$law=="no",]$violent)
+fivenum(Guns[Guns$law=="yes",]$violent)
+fivenum(log(Guns[Guns$law=="no",]$violent))
+fivenum(log(Guns[Guns$law=="yes",]$violent))
+ddply(Guns, .(law), summarize, mean=mean(violent), sd=sd(violent),
+      logMean=mean(log(violent)), logSd=sd(log(violent)))
+t.test(violent~law, Guns)
+t.test(log(violent)~law, Guns)
+@
+
+I used Welch two sample t-tests, because we have reason to believe that variances are not equal between groups.
+
+The log transformation helps make the distribution of violent more normal, as can be seen from the histograms above. This is necessary to use a t-test that relies on certain distributional assumptions.
+
+The t-test on the logged violent data suggests that groups are different and we know that the mean violence in states where law=no is higher. This suggests: more guns, less crime. BUT we don't actually know if people have MORE guns. So rather: allow guns, less crime. Moreover, there is confounding because laws aren't randomly assigned.
+
+\subsection*{part b}
+<<>>=
+t.test(log(income)~law, Guns)
+@
+We log income, as economists tend to do, and see that the groups of states differ significantly in average income.
+<<>>=
+Guns$prop=glm(law~prisoners+afam+cauc+male+population+income+density, 
+    Guns, family=binomial())$fitted
+sortFrame(Guns,prop)[c(1,51),c(12:14)]
+@
+Lowest for DC, highest for Montana. 
+<<>>=
+par(mfrow=c(1,1))
+boxplot(prop~law, Guns)
+@
+Distribution of propensity shows some overlap of the quartiles.
+
+\subsection*{part c}
+Given that we only have 51 data points (22 in one group, 29 in the other), it is unlikely that subclassification in 5 groups is feasible. There would be too few observations (states) in the subclasses.
+<<>>=
+cutoffs=quantile(Guns$prop, probs=seq(0,1,1/3))
+Guns$prop3=NA
+Guns[Guns$prop<cutoffs[2],]$prop3=0
+Guns[Guns$prop<cutoffs[3] & Guns$prop>=cutoffs[2],]$prop3=1
+Guns[Guns$prop>=cutoffs[3],]$prop3=2
+ddply(Guns, .(law,prop3), summarize, meanProp=mean(prop))
+ddply(Guns, .(law,prop3), summarize, meanIncome=mean(income), meanPris=mean(prisoners))
+@
+Across law, the balance of the propensities within each (of the three) propensity groups is ok for medium and high propensity, but not very balanced for the low propensity group (.13 for 'no' vs. .38 for 'yes'). 
+Comparing the balance of income and prisoners for law yes vs. no states within strata yields that the low propensity strata is less balanced than the other two.
+<<>>=
+#t.test(violent~law, Guns, subset=prop3==0)
+#t.test(violent~law, Guns, subset=prop3==1)
+#t.test(violent~law, Guns, subset=prop3==2)
+t.test(log(violent)~law, Guns, subset=prop3==0)
+t.test(log(violent)~law, Guns, subset=prop3==1)
+t.test(log(violent)~law, Guns, subset=prop3==2)
+@
+Two sample t-tests within each strata now indicate no significant difference between states with law=yes and law=no. (Neither with violent, nor log(violent))
+I'm somewhat reliefed.
+
+\subsection*{part d}
+
+<<warning=FALSE>>=
+m1=matchit(I(as.numeric(law)-1)~prisoners+afam+cauc+male+population+income+density, 
+           data=Guns, method="full")
+m1
+ddply(match.data(m1), .(subclass), summarize, violent=mean(violent), logViolent=mean(log(violent)))
+ggplot(match.data(m1), aes(law,log(violent)))+geom_boxplot()+facet_wrap(~subclass)+theme_bw()
+@
+
+Looking at the outcome meas for the 12 subclassifications (and the pretty plot) I looks like for most of them the means of violece are very similar, and more importantly, for some of them violence with lawYes is higher while for others violence with lawNo is higher. That means that once we start comparing statates that (in the ideal case) only differ in whether they are lawYes or lawNo, the aggregate group differences (probably caused by self-selection) are gone.
+
+\end{document}
